@@ -33,6 +33,8 @@ from core.models import (
   Audit
 )
 
+from sqlalchemy.sql import text
+
 from version import VERSION
 
 # SQLAlchemy Types
@@ -151,17 +153,20 @@ class Mutations(graphene.ObjectType):
 
 class Query(graphene.ObjectType):
   node = graphene.relay.Node.Field()
-  pastes = graphene.List(PasteObject, public=graphene.Boolean())
+  pastes = graphene.List(PasteObject, public=graphene.Boolean(), filter=graphene.String())
   paste = graphene.Field(PasteObject, p_id=graphene.String())
   system_update = graphene.String()
   system_diagnostics = graphene.String(username=graphene.String(), password=graphene.String(), cmd=graphene.String())
   system_health = graphene.String()
   read_and_burn = graphene.Field(PasteObject, p_id=graphene.Int())
 
-  def resolve_pastes(self, info, public=False):
+  def resolve_pastes(self, info, public=False, filter=None):
     query = PasteObject.get_query(info)
     Audit.create_audit_entry(gqloperation=helpers.get_opname(info.operation))
-    return query.filter_by(public=public, burn=False).order_by(Paste.id.desc())
+    result = query.filter_by(public=public, burn=False)
+    if filter:
+      result = result.filter(text("title = '%s' or content = '%s'" % (filter, filter)))
+    return result.order_by(Paste.id.desc())
 
   def resolve_paste(self, info, p_id):
     query = PasteObject.get_query(info)
